@@ -1,0 +1,24 @@
+[Unit]
+Description=Mail web console (@@DOMAIN@@, loopback only)
+After=@@MADDY_SERVICE@@.service nginx.service
+Wants=@@MADDY_SERVICE@@.service
+
+[Service]
+Type=simple
+User=@@MADDY_USER@@
+Group=@@MADDY_USER@@
+WorkingDirectory=@@DATA_DIR@@
+Environment=PYTHONUNBUFFERED=1
+Environment=MAILSTACK_CONFIG=@@CONFIG_JSON@@
+Environment=MADDY_BIN=@@MADDY_BIN@@
+ExecStart=/usr/bin/python3 @@ADMIN_PY@@
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=@@DATA_DIR@@ @@RUNTIME_DIR@@ @@SECRETS_DIR@@
+
+[Install]
+WantedBy=multi-user.target

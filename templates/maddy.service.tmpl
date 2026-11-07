@@ -1,0 +1,29 @@
+[Unit]
+Description=Maddy Mail Server (@@DOMAIN@@)
+Documentation=https://maddy.email/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@@MADDY_USER@@
+Group=@@MADDY_USER@@
+ExecStart=@@MADDY_BIN@@ --config @@MADDY_CONF@@ run
+ExecReload=/bin/kill -USR1 $MAINPID
+Restart=always
+RestartSec=3
+RuntimeDirectory=@@RUNTIME_NAME@@
+RuntimeDirectoryMode=0750
+StateDirectory=@@STATE_NAME@@
+StateDirectoryMode=0700
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER CAP_SETUID CAP_SETGID
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=@@DATA_DIR@@ @@RUNTIME_DIR@@
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

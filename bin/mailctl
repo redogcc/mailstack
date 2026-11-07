@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# Small operational wrapper installed as <prefix>/bin/mailctl
+set -Eeuo pipefail
+
+PREFIX="${MAILSTACK_PREFIX:-/opt/mailstack}"
+STATE_DIR="${MAILSTACK_STATE:-/etc/mailstack}"
+CONFIG_JSON="$STATE_DIR/config.json"
+INSTALL_CONF="$STATE_DIR/install.conf"
+
+json_get() { python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get(sys.argv[2],""))' "$CONFIG_JSON" "$1" 2>/dev/null || true; }
+
+[[ -f "$CONFIG_JSON" ]] || { echo "not installed: $CONFIG_JSON missing" >&2; exit 1; }
+MADDY_SERVICE="$(json_get maddy_service)"; MADDY_SERVICE="${MADDY_SERVICE:-maddy}"
+ADMIN_SERVICE="$(json_get admin_service)"; ADMIN_SERVICE="${ADMIN_SERVICE:-maddy-admin}"
+DOMAIN="$(json_get domain)"
+
+usage() {
+  cat <<EOF
+mailctl - operations helper for mailstack ($DOMAIN)
+
+  status              service overview
+  check               full self-check (services, ports, cert, DKIM, IMAP, web)
+  dns                 print the DNS records this deployment needs
+  logs [N]            last N lines of the Maddy journal (default 80)
+  accounts            list mailboxes
+  add ADDRESS         create a mailbox (prompts for a password)
+  passwd ADDRESS      reset a mailbox password
+  backup [DIR]        tar the mail state into DIR (default /var/backups/mailstack)
+  cert renew          renew the TLS certificate
+  cert info           show the certificate expiry
+  config              print the effective config.json
+EOF
+}
+
+case "${1:-}" in
+  status)
+    for svc in "$MADDY_SERVICE" "$ADMIN_SERVICE" nginx; do
+      systemctl is-active --quiet "$svc" 2>/dev/null \
+        && printf '  %-18s active\n' "$svc" \
+        || printf '  %-18s %s\n' "$svc" "$(systemctl is-active "$svc" 2>/dev/null || echo absent)"
+    done
+    echo
+    echo "  domain     : $DOMAIN"
+    echo "  hostname   : $(json_get mail_hostname)"
+    echo "  public URL : $(json_get public_url)"
+    echo "  data dir   : $(json_get data_dir)"
+    ;;
+  check)
+    MAILSTACK_CONFIG="$CONFIG_JSON" exec python3 "$PREFIX/scripts/selfcheck.py" "${@:2}"
+    ;;
+  dns)
+    MAILSTACK_INSTALL_CONF="$INSTALL_CONF" MAILSTACK_CONFIG="$CONFIG_JSON" \
+      exec python3 "$PREFIX/scripts/show-dns-records.py" "${@:2}"
+    ;;
+  logs)
+    n="${2:-80}"
+    exec journalctl -u "$MADDY_SERVICE" -n "$n" --no-pager --output=short-iso
+    ;;
+  accounts)
+    maddy_bin="$(json_get maddy_bin)"; maddy_bin="${maddy_bin:-/usr/local/bin/maddy}"
+    "$maddy_bin" --config "$(json_get maddy_conf)" creds list
+    ;;
+  add|passwd)
+    addr="${2:-}"; [[ -n "$addr" ]] || { echo "usage: mailctl $1 ADDRESS" >&2; exit 2; }
+    maddy_bin="$(json_get maddy_bin)"; maddy_bin="${maddy_bin:-/usr/local/bin/maddy}"
+    conf="$(json_get maddy_conf)"
+    if [[ "$1" == "add" ]]; then
+      "$maddy_bin" --config "$conf" creds create "$addr"
+      "$maddy_bin" --config "$conf" imap-acct create "$addr"
+    else
+      "$maddy_bin" --config "$conf" creds password "$addr"
+    fi
+    ;;
+  backup)
+    dest="${2:-/var/backups/mailstack}"
+    mkdir -p "$dest"
+    data="$(json_get data_dir)"
+    tar czf "$dest/mailstack-$(date +%Y%m%d-%H%M%S).tar.gz" \
+      -C "$(dirname "$data")" "$(basename "$data")" "$INSTALL_CONF" "$CONFIG_JSON"
+    ls -lh "$dest" | tail -3
+    ;;
+  cert)
+    case "${2:-info}" in
+      renew)
+        certbot renew --deploy-hook /usr/local/bin/mailstack-deploy-cert
+        ;;
+      info)
+        openssl x509 -in "$(json_get cert_dir)/fullchain.pem" -noout -subject -enddate
+        ;;
+      *) usage; exit 2 ;;
+    esac
+    ;;
+  config|"")
+    [[ -z "${1:-}" ]] && { usage; exit 0; }
+    cat "$CONFIG_JSON"
+    ;;
+  *) usage; exit 2 ;;
+esac

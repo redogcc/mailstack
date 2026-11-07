@@ -1,0 +1,68 @@
+# ---------------------------------------------------------------------------
+# mailstack installer configuration
+# Copy to /etc/mailstack/install.conf or pass with: bash install.sh -c FILE
+# Every value can also be overridden on the command line (see --help).
+# ---------------------------------------------------------------------------
+
+# Mail domain handled by this server (the part after @).
+MAIL_DOMAIN=example.com
+
+# Hostname of the mail server. Its A record must point to SERVER_IP.
+MAIL_HOSTNAME=mail.example.com
+
+# Public IPv4 of this machine. Leave empty to auto-detect.
+SERVER_IP=
+
+# Administrator mailbox. The local part becomes the web login name.
+ADMIN_EMAIL=admin@example.com
+
+# "auto" generates a strong random password and prints it once at the end.
+ADMIN_PASSWORD=auto
+
+# How to obtain the TLS certificate:
+#   http01      Let's Encrypt over HTTP-01 (needs port 80 + DNS already live)
+#   dns-manual  Let's Encrypt over DNS-01, you add TXT records by hand
+#   dns-token   Let's Encrypt over DNS-01 via a bearer-token cloud DNS API
+#   dns-aksign  Let's Encrypt over DNS-01 via an AK/SK signed cloud DNS API
+#   selfsigned  Local self-signed certificate (testing only)
+TLS_MODE=http01
+
+# Contact address for Let's Encrypt expiry notices.
+ACME_EMAIL=admin@example.com
+
+# --- Bearer-token DNS API (TLS_MODE=dns-token) -----------------------------
+# Base URL of the DNS API published by your cloud provider, including the
+# version path (for example https://dns-api.example.net/v4).
+DNS_API_BASE=
+DNS_TOKEN=
+
+# --- AK/SK signed DNS API (TLS_MODE=dns-aksign) ----------------------------
+# Host / region / service come from your cloud provider's DNS API docs.
+DNS_API_HOST=
+DNS_API_REGION=
+DNS_API_SERVICE=dns
+DNS_ACCESS_KEY=
+DNS_SECRET_KEY=
+DNS_ZONE_ID=
+
+# --- Web -------------------------------------------------------------------
+# Web console (account management + webmail). Strongly recommended.
+ENABLE_WEB=yes
+WEB_PORT=8080
+# Simple public landing page with a login button.
+ENABLE_LANDING=yes
+
+# --- Advanced (defaults are fine for most deployments) ---------------------
+INSTALL_PREFIX=/opt/mailstack
+STATE_DIR=/etc/mailstack
+SECRETS_DIR=/etc/maddy-admin
+DATA_DIR=/var/lib/maddy
+MADDY_CONF=/etc/maddy/maddy.conf
+MADDY_BIN=/usr/local/bin/maddy
+MADDY_VERSION=0.9.7
+MADDY_USER=maddy
+# Standard ports; change only when you know why (e.g. behind a proxy).
+SMTP_PORT=25
+SMTPS_PORT=465
+SUBMISSION_PORT=587
+IMAP_PORT=993
