@@ -1,0 +1,57 @@
+name: release
+
+# Publishing a release is done by GitHub itself, on tag push: the runner holds
+# GITHUB_TOKEN, so no maintainer credentials are needed on any workstation.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract release notes from CHANGELOG
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { found = 1; next }
+            found && /^## \[/       { exit }
+            found                   { print }
+          ' CHANGELOG.md > /tmp/notes.md || true
+
+          if [ ! -s /tmp/notes.md ]; then
+            echo "No CHANGELOG section for $VERSION; falling back to the tag message."
+            git for-each-ref --format='%(contents)' "refs/tags/$GITHUB_REF_NAME" > /tmp/notes.md
+          fi
+
+          {
+            cat /tmp/notes.md
+            printf '\n---\n\n'
+            printf 'Full changelog: https://github.com/%s/blob/main/CHANGELOG.md\n' "$GITHUB_REPOSITORY"
+            printf 'Install: `git clone https://github.com/%s.git && sudo bash mailstack/install.sh`\n' "$GITHUB_REPOSITORY"
+          } > /tmp/notes-final.md
+
+          echo "----- release notes -----"
+          cat /tmp/notes-final.md
+
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          TITLE="mailstack $TAG"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists - updating notes."
+            gh release edit "$TAG" --title "$TITLE" --notes-file /tmp/notes-final.md
+          else
+            gh release create "$TAG" --title "$TITLE" \
+              --notes-file /tmp/notes-final.md --verify-tag
+          fi
+          gh release view "$TAG" --json url,isDraft,isPrerelease -q '"published: \(.url)  draft=\(.isDraft) prerelease=\(.isPrerelease)"'
