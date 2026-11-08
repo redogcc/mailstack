@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/redogcc/mailstack/actions/workflows/ci.yml/badge.svg)](https://github.com/redogcc/mailstack/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Ubuntu%2022.04%20%7C%2024.04%20%7C%20Debian%2012-lightgrey)
 
 **A complete business mail server in one command — on your own hardware.**
@@ -60,6 +60,10 @@ password (once), and the result of a full self-check.
 - **Web console** at `/admin/`: login/registration, three-pane webmail, mailbox CRUD with
   inline password reset, bulk provisioning, organisations, one-time activation invites,
   system health page
+- **Super-admin mailbox inspection**: click a mailbox name under Accounts to open a
+  read-only side drawer with that employee's folders, message list, body and attachments.
+  Only `ADMIN_EMAIL` can use it, it never marks messages as read, and every open is
+  written to the audit log as `AUDIT_MAILBOX`
 - **Site**: optional landing page with a login button
 
 ## Requirements

@@ -13,7 +13,7 @@
 # =============================================================================
 set -Eeuo pipefail
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 

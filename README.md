@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/redogcc/mailstack/actions/workflows/ci.yml/badge.svg)](https://github.com/redogcc/mailstack/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Ubuntu%2022.04%20%7C%2024.04%20%7C%20Debian%2012-lightgrey)
 
 **一条命令，把企业邮箱装进自己的服务器。**
@@ -79,11 +79,25 @@ Choose 1-5 [1]:
 - 账号管理：新建、删除、行内改密、强密码生成、批量创建（最多 500）
 - 组织管理：默认销售/行政/财务/技术/售后/电销，可自定义、可批量调整归属
 - 激活邀请：一次性令牌 + 72 小时有效期，用户自行设置密码
+- 超级管理员查阅：在账号列表点邮箱名，右侧抽屉只读查看该员工邮件（列表 + 正文 + 附件）
 - 系统自检页：DNS、证书、端口、服务、队列一览
 
 **站点**
 - 可选落地页（含登录入口），也可用 `--no-landing` 关闭
 - `/admin/` 反向代理到仅监听 127.0.0.1 的管理台进程
+
+### 超级管理员邮件查阅
+
+合规审计、离职交接、纠纷取证常需要查某个邮箱的历史邮件，但把密码发给第三方既不安全
+也不可追溯。所以管理台内置了一个**只读查阅抽屉**，入口在「系统管理 → 账号管理」的邮箱名上：
+
+| 设计点 | 做法 |
+|---|---|
+| 谁能用 | 仅 `ADMIN_EMAIL` 对应的超级管理员；普通员工登录后既看不到入口，接口层也会被拦截 |
+| 能不能改 | 只读。打开、列表、读信全程不发送 `\Seen` 标记，不改变对方未读状态 |
+| 记不记日志 | 每打开一个非本人邮箱写一条 `AUDIT_MAILBOX` 到 `auth.log`：操作者、目标邮箱、来源 IP、时间；不记录主题和正文 |
+| 越权怎么办 | 服务端只信任会话里的账号；客户端就算伪造 `account` 参数也会被强制改写成本人 |
+| 拿不到密码怎么办 | 员工自行改过密码后，服务端没有可用凭据，抽屉会明确报错而不是静默失败 |
 
 ---
 
@@ -242,6 +256,7 @@ mailctl cert renew    # 续期证书
 - SPF `-all` + DKIM 2048 + DMARC `p=quarantine`（观察后可升 `reject`）
 - 管理台：HttpOnly/Secure/SameSite Cookie、CSRF 双校验、会话 2h 空闲/12h 绝对超时、
   登录失败锁定、按账号强制数据隔离
+- 超级管理员查阅员工邮箱为只读设计，全程审计留痕（`AUDIT_MAILBOX`），且不改变对方已读状态
 - 邮件 HTML 双层防御：服务端清洗 + `iframe sandbox` 无脚本渲染
 - systemd 沙箱：`ProtectSystem=strict`、`NoNewPrivileges`、最小 `ReadWritePaths`
 - 敏感文件 600；nginx 隐藏版本号并带 CSP/XFO/Referrer/Permissions 头
