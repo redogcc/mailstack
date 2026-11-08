@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/redogcc/mailstack/actions/workflows/ci.yml/badge.svg)](https://github.com/redogcc/mailstack/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.1.0-blue)
+![Version](https://img.shields.io/github/v/release/redogcc/mailstack?label=version)
 ![Platform](https://img.shields.io/badge/platform-Ubuntu%2022.04%20%7C%2024.04%20%7C%20Debian%2012-lightgrey)
 
 **一条命令，把企业邮箱装进自己的服务器。**
@@ -10,7 +10,7 @@
 Maddy（SMTP/IMAP）+ nginx（TLS）+ 轻量 Web 管理台，不依赖 Docker，不需要 Kubernetes，
 一台 1 核 1G 的云主机就能跑起来。
 
-[快速开始](#快速开始) · [功能](#功能) · [安装参数](#安装参数) · [日常运维](#日常运维) · [English](README.en.md)
+[快速开始](#快速开始) · [功能](#功能) · [安装参数](#安装参数) · [日常运维](#日常运维) · [版本发布](https://github.com/redogcc/mailstack/releases) · [English](README.en.md)
 
 ---
 
