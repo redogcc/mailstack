@@ -36,6 +36,7 @@ systemd 单元启用 `ProtectSystem=strict`、`ProtectHome=true`、`NoNewPrivile
 | 输出 | 所有用户数据 `html.escape`；邮件 HTML 经服务端清洗后放入 `iframe sandbox`（无 `allow-scripts`）渲染 |
 | 附件 | 通过 IMAP 序号读取，不拼接文件系统路径，天然无路径穿越 |
 | 审计 | 登录、失败、改密、删除、组织变更写入 `/var/lib/maddy/admin/auth.log` |
+| 超管查阅 | 仅 `ADMIN_EMAIL` 可开抽屉查阅他人邮箱；只读（不发 `\Seen`），每次打开写 `AUDIT_MAILBOX`（操作者/目标/IP/时间，不含主题与正文） |
 
 ## 4. 密钥与文件权限
 
