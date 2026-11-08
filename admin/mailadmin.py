@@ -7,7 +7,8 @@ v4: full three-pane mail client (folders, search, threaded reading,
 attachments, compose/reply/forward, drafts) + original admin views.
 v5: form login/register, server-side sessions, per-account data isolation.
 v6: organisations, mailbox ownership, bulk reassignment, account page reorder.
-v7: portable build - every deployment value is read from MAILSTACK_CONFIG.
+v7: super-admin read-only mailbox inspection (audit trail, no read-state change)
+    + portable build - every deployment value is read from MAILSTACK_CONFIG.
 """
 import base64
 import datetime
@@ -1614,8 +1615,25 @@ def api_mail_identities(q):
                           "is_admin": a == ADMIN_MAIL} for a in existing_accounts()]}
 
 
+def audit_mailbox_open(addr):
+    """Compliance trail for super-admin mailbox inspection.
+
+    Records who opened whose mailbox. Never records subjects, bodies or
+    attachments — the log would otherwise become the leak it prevents.
+    """
+    sess = getattr(CTX, "session", None)
+    if not sess:
+        return
+    actor = sess.get("account") or ""
+    if actor != ADMIN_MAIL or addr == ADMIN_MAIL:
+        return
+    audit("AUDIT_MAILBOX", addr, sess.get("ip") or "",
+          "read-only view by %s" % actor)
+
+
 def api_mail_folders(q):
     addr = safe_account(q)
+    audit_mailbox_open(addr)
     m, err = mail_login(addr)
     if err:
         return {"ok": False, "msg": err}
@@ -2450,6 +2468,75 @@ select.orgsel.inline{display:block;max-width:160px;margin-top:6px;padding:4px 6p
 .orgsum{font-size:12px;color:var(--muted);margin:0 0 14px}
 .orgedit{display:flex;gap:6px;align-items:center}
 .orgedit .field{max-width:170px;padding:6px 9px;font-size:12px}
+
+/* ---------- super-admin mailbox audit drawer ---------- */
+.mailtd{display:flex;align-items:center;gap:8px;min-width:0}
+.mailtd .chk{flex:0 0 auto}
+.maillink{background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left;
+ border-bottom:1px dashed transparent;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.maillink:hover{color:var(--accent);border-bottom-color:var(--accent)}
+.maillink:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+.maillink .eye{font-size:10.5px;color:var(--muted);margin-left:5px}
+.maillink:hover .eye{color:var(--accent)}
+.audit-mask{position:fixed;inset:0;background:rgba(38,34,29,.34);z-index:60;opacity:0;pointer-events:none;transition:opacity .22s}
+.audit-mask.on{opacity:1;pointer-events:auto}
+.audit{position:fixed;top:0;right:0;height:100vh;width:min(1080px,94vw);background:var(--panel);
+ border-left:1px solid var(--line);display:flex;flex-direction:column;z-index:61;
+ transform:translateX(102%);transition:transform .28s cubic-bezier(.22,.61,.36,1);
+ box-shadow:-18px 0 48px rgba(38,34,29,.14)}
+.audit.on{transform:none}
+.audit-head{flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:14px 18px;
+ border-bottom:1px solid var(--line);background:#fbf9f4}
+.audit-id{min-width:0;flex:1}
+.audit-mail{font-size:13.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.audit-sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+.audit-close{flex:0 0 auto;width:32px;height:32px;border:1px solid var(--line);border-radius:8px;
+ background:#fff;color:var(--ink2);font:19px/1 Georgia,serif;cursor:pointer;padding:0}
+.audit-close:hover{border-color:var(--accent);color:var(--accent)}
+.audit-bar{flex:0 0 auto;display:flex;gap:8px;padding:10px 18px;border-bottom:1px solid var(--line2)}
+.audit-bar .field{height:34px;padding:0 10px;font-size:12.5px}
+.audit-bar select.field{width:158px;flex:0 0 158px}
+.audit-bar input.field{flex:1;min-width:0}
+.audit-body{flex:1;min-height:0;display:grid;grid-template-columns:340px 1fr;overflow:hidden}
+.audit-list{border-right:1px solid var(--line);overflow-y:auto;background:#fffdf9}
+.audit-read{overflow-y:auto;background:#fff;min-width:0}
+.audit-foot{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:8px 18px;
+ border-top:1px solid var(--line);background:#fbf9f4;font-size:11.5px;color:var(--muted)}
+.audit-ro{margin-left:auto;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.audit-ro i{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block}
+.arow{padding:11px 15px;border-bottom:1px solid var(--line2);cursor:pointer}
+.arow:hover{background:#faf7f1}
+.arow.on{background:var(--accent2);box-shadow:inset 2px 0 0 var(--accent)}
+.arow .al1{display:flex;align-items:baseline;gap:8px}
+.arow .adot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:0 0 6px;align-self:center}
+.arow .afrom{font-size:12.5px;color:var(--ink2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arow.unread .afrom{font-weight:600;color:var(--ink)}
+.arow .adate{font-size:11px;color:var(--muted);white-space:nowrap}
+.arow .asubj{font-size:12.5px;color:var(--ink2);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arow.unread .asubj{font-weight:600;color:var(--ink)}
+.arow .asnip{font-size:11.5px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arv{display:flex;flex-direction:column;min-height:100%}
+.arv-head{padding:18px 22px 14px;border-bottom:1px solid var(--line2)}
+.arv-subj{font:400 18px/1.35 Georgia,"Songti SC",serif;margin:0 0 12px;color:var(--ink);word-break:break-word}
+.arv-meta{display:flex;flex-wrap:wrap;gap:5px 18px;font-size:12px;color:var(--ink2)}
+.arv-meta b{font-weight:600}
+.arv-meta .mono{color:var(--muted)}
+.arv-body{flex:1;min-height:0}
+.arv-body iframe{width:100%;border:0;height:56vh;min-height:380px;display:block;background:#fff}
+.arv-text{padding:18px 22px;margin:0;white-space:pre-wrap;word-break:break-word;
+ font:13px/1.8 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;color:var(--ink2)}
+.arv-atts{padding:12px 22px;border-top:1px solid var(--line2);display:flex;flex-wrap:wrap;gap:8px}
+.arv-att{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--line);
+ border-radius:7px;background:#fbf9f4;font-size:11.5px;color:var(--ink2);cursor:pointer}
+.arv-att:hover{border-color:var(--accent);color:var(--accent)}
+.audit-empty{padding:40px 20px;text-align:center;color:var(--muted);font-size:12.5px;line-height:1.9}
+@media(max-width:860px){
+ .audit{width:100vw}
+ .audit-body{grid-template-columns:1fr;grid-template-rows:42% 58%}
+ .audit-list{border-right:0;border-bottom:1px solid var(--line)}
+ .arv-body iframe{height:48vh}
+ .audit-bar select.field{width:120px;flex:0 0 120px}
+}
 </style></head><body>
 <div class="app">
   <header class="top">
@@ -2540,7 +2627,7 @@ Web    https://203.0.113.10/admin/  （HTTPS + 密码保护）
       </div>
 
       <div id="sys-accounts" class="hide">
-        <div class="syshead"><h2>账号管理</h2><p>创建账号、按组织筛选与调整归属、修改密码、删除邮箱；主管理员账号受保护</p></div>
+        <div class="syshead"><h2>账号管理</h2><p>创建账号、按组织筛选与调整归属、修改密码、删除邮箱；<b>点击任意邮箱可在右侧只读查阅该员工邮件</b>（超级管理员权限，普通用户不可见）；主管理员账号受保护</p></div>
         <div class="card" id="card-add-account"><h3>新增账号</h3>
           <div class="row"><div><label class="lb">邮箱地址</label><input class="field" id="a-email" placeholder="name@example.com"></div>
             <div><label class="lb">初始密码（≥10 位）</label><input class="field" id="a-pw" placeholder="留空则自动生成"></div>
@@ -2550,7 +2637,7 @@ Web    https://203.0.113.10/admin/  （HTTPS + 密码保护）
           <div class="acbar">
             <input class="field" id="acct-q" placeholder="搜索邮箱地址…" autocomplete="off">
             <select class="field orgsel" id="acct-org-filter"></select>
-            <span class="note">共 <b id="acct-total">0</b> 个账号 · 可直接在本行调整组织或修改密码</span>
+            <span class="note">共 <b id="acct-total">0</b> 个账号 · 点击邮箱名可查看该员工邮件 · 可直接在本行调整组织或修改密码</span>
           </div>
           <div class="acbar bulkbar">
             <label class="pickline"><input type="checkbox" class="chk" id="acct-pickall"> 全选当前结果</label>
@@ -2655,6 +2742,29 @@ Web    https://203.0.113.10/admin/  （HTTPS + 密码保护）
     <button class="btn ghost sm" id="cmp-cancel">取消</button></div>
 </div></div>
 <div class="toast" id="toast"></div>
+
+<div class="audit-mask" id="audit-mask"></div>
+<aside class="audit" id="audit" aria-hidden="true" aria-label="员工邮件查阅">
+  <div class="audit-head">
+    <div class="audit-id">
+      <div class="audit-mail mono" id="audit-email">—</div>
+      <div class="audit-sub" id="audit-sub">超级管理员只读查阅</div>
+    </div>
+    <button class="audit-close" id="audit-close" title="关闭（Esc）" aria-label="关闭">×</button>
+  </div>
+  <div class="audit-bar">
+    <select class="field" id="audit-folder"></select>
+    <input class="field" id="audit-q" placeholder="搜索发件人 / 主题 / 正文…" autocomplete="off">
+  </div>
+  <div class="audit-body">
+    <div class="audit-list" id="audit-list"><div class="audit-empty">正在加载…</div></div>
+    <div class="audit-read" id="audit-read"><div class="audit-empty">从左侧选择一封邮件查看内容</div></div>
+  </div>
+  <div class="audit-foot">
+    <span id="audit-count">—</span>
+    <span class="audit-ro"><i></i>只读模式 · 不改变对方已读状态</span>
+  </div>
+</aside>
 
 <script>
 const SESSION={account:"__SESSION_ACCOUNT__",is_admin:__IS_ADMIN__,csrf:"__CSRF_TOKEN__"};
@@ -3133,8 +3243,10 @@ function acctRows(){
   $('#acct').innerHTML='<table><thead><tr><th style="width:30%">邮箱</th><th style="width:19%">组织</th>'+
    '<th>认证</th><th>IMAP 存储</th><th style="width:190px">操作</th></tr></thead><tbody>'+list.map(a=>{
     const open=ACCT_OPEN===a.email;
-    return '<tr><td class="mono"><label class="pickline"><input type="checkbox" class="chk" data-pick="'+esc(a.email)+'"'+
-     (ACCT_SEL.has(a.email)?' checked':'')+'>'+esc(a.email)+'</label></td>'+
+    return '<tr><td class="mono mailtd"><input type="checkbox" class="chk" data-pick="'+esc(a.email)+'"'+
+     (ACCT_SEL.has(a.email)?' checked':'')+'>'+
+     '<button class="maillink" data-audit="'+esc(a.email)+'" title="查看该员工邮件（超级管理员只读）">'+
+     esc(a.email)+'<span class="eye">查看</span></button></td>'+
      '<td>'+orgTag(a)+'<select class="orgsel inline" data-orgset="'+esc(a.email)+'">'+orgOpts('row',a.org_id||'')+'</select></td>'+
      '<td><span class="pill '+(a.creds?'ok':'bad')+'">'+(a.creds?'正常':'缺失')+'</span></td>'+
      '<td><span class="pill '+(a.imap?'ok':'bad')+'">'+(a.imap?'正常':'缺失')+'</span></td>'+
@@ -3333,6 +3445,127 @@ $('#b-refresh').onclick=batch;
 $('#b-remove').onclick=async()=>{ if(!confirm('确认删除本批次全部测试账号及其邮件？此操作不可撤销。'))return; const r=await post('batch/remove',{}); showMsg('#b-msg',r.msg,r.ok); batch(); boot(); };
 $('#k-run').onclick=check; $('#l-refresh').onclick=logs;
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeCompose(); } });
+
+/* ---------------- super-admin mailbox audit drawer ---------------- */
+const AUD={email:'',folder:'INBOX',folders:[],msgs:[],cur:null};
+function auditRefs(){ return {mask:$('#audit-mask'),panel:$('#audit'),list:$('#audit-list'),
+  read:$('#audit-read'),sel:$('#audit-folder'),q:$('#audit-q'),cnt:$('#audit-count'),
+  mail:$('#audit-email'),sub:$('#audit-sub')}; }
+function auditOpenState(on){
+  const E=auditRefs();
+  E.mask.classList.toggle('on',on);
+  E.panel.classList.toggle('on',on);
+  E.panel.setAttribute('aria-hidden',on?'false':'true');
+  document.body.style.overflow=on?'hidden':'';
+}
+function closeAudit(){ auditOpenState(false); AUD.cur=null; }
+async function openAudit(email){
+  const E=auditRefs();
+  AUD.email=email; AUD.folder='INBOX'; AUD.msgs=[]; AUD.cur=null;
+  E.mail.textContent=email;
+  E.sub.textContent='超级管理员只读查阅 · 正在连接…';
+  E.q.value=''; E.cnt.textContent='—';
+  E.list.innerHTML='<div class="audit-empty"><span class="spin"></span> 正在连接该邮箱…</div>';
+  E.read.innerHTML='<div class="audit-empty">从左侧选择一封邮件查看内容</div>';
+  auditOpenState(true);
+  try{
+    const d=await api('mail/folders?'+qs({account:email}));
+    if(!d.ok){
+      E.sub.textContent='无法打开该邮箱';
+      E.list.innerHTML='<div class="audit-empty">'+esc(d.msg||'读取失败')+'</div>';
+      return;
+    }
+    AUD.folders=d.folders||[];
+    E.sel.innerHTML=AUD.folders.map(f=>'<option value="'+esc(f.name)+'">'+esc(f.label)+'（'+(f.total||0)+'）</option>').join('');
+    AUD.folder=AUD.folders.some(f=>f.name==='INBOX')?'INBOX':(AUD.folders[0]?AUD.folders[0].name:'INBOX');
+    E.sel.value=AUD.folder;
+    E.sub.textContent='超级管理员只读查阅 · '+AUD.folders.length+' 个文件夹 · 未读 '+(d.total_unseen||0)+' 封';
+    await auditList();
+  }catch(err){
+    E.list.innerHTML='<div class="audit-empty">'+esc(err.message||'加载失败')+'</div>';
+  }
+}
+async function auditList(){
+  const E=auditRefs();
+  E.list.innerHTML='<div class="audit-empty"><span class="spin"></span> 正在读取邮件…</div>';
+  E.read.innerHTML='<div class="audit-empty">正在加载…</div>';
+  const q=(E.q.value||'').trim();
+  let d;
+  try{ d=await api('mail/list?'+qs({account:AUD.email,folder:AUD.folder,page:1,size:60,q:q,filter:'all'})); }
+  catch(err){ E.list.innerHTML='<div class="audit-empty">'+esc(err.message||'读取失败')+'</div>'; return; }
+  if(!d.ok){ E.list.innerHTML='<div class="audit-empty">'+esc(d.msg||'读取失败')+'</div>'; E.cnt.textContent='—'; return; }
+  AUD.msgs=d.messages||[]; AUD.cur=null;
+  const total=d.total||0;
+  E.cnt.textContent=(q?'命中 ':'')+total+' 封'+(total>AUD.msgs.length?' · 显示最近 '+AUD.msgs.length+' 封':'');
+  if(!AUD.msgs.length){
+    E.list.innerHTML='<div class="audit-empty">'+(q?'没有匹配的邮件':'这个文件夹是空的')+'</div>';
+    E.read.innerHTML='<div class="audit-empty">没有可显示的邮件</div>';
+    return;
+  }
+  E.list.innerHTML=AUD.msgs.map(m=>{
+    const who=(m.from&&(m.from.name||m.from.addr))||'(未知)';
+    return '<div class="arow'+(m.seen?'':' unread')+'" data-aid="'+esc(m.id)+'">'+
+      '<div class="al1">'+(m.seen?'':'<span class="adot"></span>')+
+        '<span class="afrom">'+esc(who)+'</span>'+
+        '<span class="adate">'+fmtDate(m.ts,m.date)+'</span></div>'+
+      '<div class="asubj">'+(m.has_attachment?'📎 ':'')+esc(m.subject)+'</div>'+
+      '<div class="asnip">'+esc(m.snippet||'')+'</div></div>';
+  }).join('');
+  $$('[data-aid]').forEach(el=>el.onclick=()=>auditRead(el.dataset.aid));
+  auditRead(AUD.msgs[0].id);
+}
+async function auditRead(id){
+  const E=auditRefs();
+  AUD.cur=String(id);
+  $$('[data-aid]').forEach(el=>el.classList.toggle('on',el.dataset.aid===AUD.cur));
+  const d=await api('mail/read?'+qs({account:AUD.email,folder:AUD.folder,id:id}));
+  if(!d.ok){ E.read.innerHTML='<div class="audit-empty">'+esc(d.msg||'读取失败')+'</div>'; return; }
+  const m=d.message, who=m.from||{name:'(未知)',addr:''};
+  const to=(m.to||[]).map(x=>x.name||x.addr).join(', ')||'—';
+  const cc=(m.cc||[]).map(x=>x.name||x.addr).join(', ');
+  const atts=(m.attachments||[]).map(a=>'<span class="arv-att" data-adl="'+
+    qs({account:AUD.email,folder:AUD.folder,id:m.id,part:a.part})+'" data-an="'+esc(a.filename)+'">📎 '+
+    esc(a.filename)+' · '+fmtSize(a.size)+'</span>').join('');
+  E.read.innerHTML='<div class="arv"><div class="arv-head">'+
+    '<h2 class="arv-subj">'+esc(m.subject)+'</h2>'+
+    '<div class="arv-meta">'+
+      '<span>发件人 <b>'+esc(who.name)+'</b> <span class="mono">&lt;'+esc(who.addr)+'&gt;</span></span>'+
+      '<span>收件人 '+esc(to)+'</span>'+(cc?'<span>抄送 '+esc(cc)+'</span>':'')+
+      '<span>'+fmtFull(m.ts,m.date)+'</span></div></div>'+
+    '<div class="arv-body" id="arv-body"></div>'+
+    (atts?'<div class="arv-atts">'+atts+'</div>':'')+'</div>';
+  const pane=$('#arv-body');
+  if(!pane) return;
+  if(m.html){
+    const f=document.createElement('iframe');
+    f.setAttribute('sandbox','allow-popups allow-popups-to-escape-sandbox');
+    f.setAttribute('title','邮件正文（安全沙箱）');
+    f.srcdoc=m.html;
+    pane.appendChild(f);
+  }else{
+    const pre=document.createElement('pre'); pre.className='arv-text';
+    pre.textContent=unescapeText(m.text); pane.appendChild(pre);
+  }
+  $$('[data-adl]').forEach(b=>b.onclick=()=>{
+    const a=document.createElement('a');
+    a.href='/admin/api/mail/attachment?'+b.dataset.adl;
+    a.download=b.dataset.an||'attachment';
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+}
+$('#audit-close').onclick=closeAudit;
+$('#audit-mask').onclick=closeAudit;
+$('#audit-folder').onchange=e=>{ AUD.folder=e.target.value; auditList(); };
+let auditTimer=null;
+$('#audit-q').oninput=()=>{ clearTimeout(auditTimer); auditTimer=setTimeout(auditList,340); };
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && $('#audit').classList.contains('on')) closeAudit(); });
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-audit]');
+  if(!b) return;
+  e.preventDefault(); e.stopPropagation();
+  openAudit(b.dataset.audit);
+});
+
 boot().catch(e=>{ toast('初始化失败：'+e.message,false); console.error(e); });
 </script></body></html>
 """

@@ -171,6 +171,51 @@ class AdminConfigTests(unittest.TestCase):
         self.assertIn("acme.example", mod.IP_ACCESS)
 
 
+class SuperAdminAuditTests(unittest.TestCase):
+    """The read-only mailbox drawer is the most sensitive feature in the console:
+    it must stay invisible to regular users and must always leave a trail."""
+
+    def setUp(self):
+        self.mod = AdminConfigTests()._load()
+
+    def test_drawer_present_in_page(self):
+        page = self.mod.PAGE
+        self.assertIn('id="audit"', page)
+        self.assertIn('id="audit-mask"', page)
+        self.assertIn('data-audit="', page)
+        self.assertIn("只读模式", page)
+
+    def test_audit_trail_only_for_other_mailboxes(self):
+        mod = self.mod
+        seen = []
+        mod.audit = lambda kind, *args: seen.append((kind,) + args)
+
+        class Sess(dict):
+            pass
+
+        mod.CTX.session = Sess(account=mod.ADMIN_MAIL, ip="203.0.113.9")
+        mod.audit_mailbox_open("alice@" + mod.DOMAIN)
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0][0], "AUDIT_MAILBOX")
+        self.assertIn("alice@" + mod.DOMAIN, seen[0][1])
+        self.assertIn(mod.ADMIN_MAIL, seen[0][3])
+
+        seen.clear()
+        mod.audit_mailbox_open(mod.ADMIN_MAIL)      # own mailbox: no entry
+        self.assertEqual(seen, [])
+
+        mod.CTX.session = Sess(account="bob@" + mod.DOMAIN, ip="203.0.113.9")
+        mod.audit_mailbox_open("alice@" + mod.DOMAIN)   # regular user: no entry
+        self.assertEqual(seen, [])
+
+    def test_regular_user_scope_is_rewritten_server_side(self):
+        src = (ROOT / "admin" / "mailadmin.py").read_text(encoding="utf-8")
+        # The handler must overwrite, not merely validate, the requested account.
+        self.assertIn('query["account"] = [sess["account"]]', src)
+        self.assertIn('payload["account"] = sess["account"]', src)
+        self.assertIn('if not is_admin and name not in allowed:', src)
+
+
 class SelfcheckTests(unittest.TestCase):
     def test_missing_config_is_safe(self):
         path = ROOT / "scripts" / "selfcheck.py"
